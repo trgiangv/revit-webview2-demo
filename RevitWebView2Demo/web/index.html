@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Revit WebView2 Demo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .title {
+            text-align: center;
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: #2c3e50;
+        }
+
+        .warning-banner {
+            background: #ffebee;
+            border: 1px solid #f44336;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 20px;
+            text-align: center;
+            color: #c62828;
+            display: none;
+        }
+
+        .warning-banner.show {
+            display: block;
+        }
+
+        .button-group {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: 1px solid #1976d2;
+            background: white;
+            color: #1976d2;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+
+        .btn:hover:not(:disabled) {
+            background: #1976d2;
+            color: white;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .card {
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .card-header {
+            padding: 16px;
+            border-bottom: 1px solid #e0e0e0;
+            font-weight: 500;
+            color: #666;
+        }
+
+        .card-content {
+            padding: 16px;
+            height: 400px;
+            overflow-y: auto;
+        }
+
+        .element-list {
+            list-style: none;
+        }
+
+        .element-item {
+            padding: 12px;
+            border-bottom: 1px solid #f0f0f0;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .element-item:hover {
+            background: #f8f9fa;
+        }
+
+        .element-item.selected {
+            background: #e3f2fd;
+            border-left: 3px solid #1976d2;
+        }
+
+        .element-name {
+            font-weight: 500;
+            margin-bottom: 4px;
+        }
+
+        .element-id {
+            font-size: 12px;
+            color: #666;
+            font-family: 'Courier New', monospace;
+        }
+
+        .empty-state {
+            text-align: center;
+            color: #999;
+            padding: 40px 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="title">WebView2 + Revit</h1>
+        
+        <div id="warning-banner" class="warning-banner">
+            You are not in a WebView Context
+        </div>
+
+        <div class="button-group">
+            <button class="btn" onclick="createSheet()" title="Revit API Transaction">
+                Create Sheet
+            </button>
+            <button id="select-btn" class="btn" onclick="selectElements()" disabled>
+                Select From List
+            </button>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                Selected Elements
+            </div>
+            <div class="card-content">
+                <ul id="element-list" class="element-list">
+                    <li class="empty-state">No elements selected</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // WebView2 Event Constants - must match C# enum
+        const WV2EVENTS = {
+            SelectionChanged: "SelectionChanged",
+            getEventName(key) {
+                return this[key]?.toLowerCase();
+            }
+        };
+
+        // Element storage
+        let elementGuids = [];
+        let selectedElementIds = [];
+
+        // Event handling
+        const eventCaptureElement = document.createElement("div");
+
+        // This function is called by WebView2 from C#
+        window.dispatchWebViewEvent = function(eventData) {
+            console.log('dispatch requested', eventData.action);
+            const eventName = WV2EVENTS.getEventName(eventData.action);
+            if (eventName !== undefined) {
+                console.log('dispatching event', eventName);
+                console.log('event payload:', eventData.payload);
+                eventCaptureElement.dispatchEvent(
+                    new CustomEvent(eventName, { detail: eventData.payload })
+                );
+            }
+        };
+
+        // Subscribe to WebView2 events
+        function subscribeToWebView2Event(eventName, handler) {
+            const eventNameLower = WV2EVENTS.getEventName(eventName);
+            if (eventNameLower === undefined) return;
+            eventCaptureElement.addEventListener(eventNameLower, handler);
+        }
+
+        // Post message to WebView2 (C#)
+        function postWebView2Message(data) {
+            if (!data.action) return;
+            if (window.chrome?.webview) {
+                window.chrome.webview.postMessage(data);
+            } else {
+                console.log('WebView2 not available - would send:', data);
+            }
+        }
+
+        // Check if running in WebView2 context
+        function isInWebViewContext() {
+            return !!window.chrome?.webview;
+        }
+
+        // UI Functions
+        function createSheet() {
+            postWebView2Message({
+                action: "create-sheet"
+            });
+        }
+
+        function selectElements() {
+            if (selectedElementIds.length === 0) return;
+            
+            postWebView2Message({
+                action: "select",
+                payload: selectedElementIds
+            });
+        }
+
+        function toggleElementSelection(elementId) {
+            const index = selectedElementIds.indexOf(elementId);
+            if (index > -1) {
+                selectedElementIds.splice(index, 1);
+            } else {
+                selectedElementIds.push(elementId);
+            }
+            
+            updateUI();
+        }
+
+        function updateElementList(elements) {
+            elementGuids = elements || [];
+            selectedElementIds = [];
+            renderElementList();
+            updateUI();
+        }
+
+        function renderElementList() {
+            const listElement = document.getElementById('element-list');
+            
+            if (elementGuids.length === 0) {
+                listElement.innerHTML = '<li class="empty-state">No elements selected</li>';
+                return;
+            }
+
+            listElement.innerHTML = elementGuids.map(element => `
+                <li class="element-item" onclick="toggleElementSelection('${element.id}')" data-id="${element.id}">
+                    <div class="element-name">${escapeHtml(element.name || 'Unnamed Element')}</div>
+                    <div class="element-id">${escapeHtml(element.id)}</div>
+                </li>
+            `).join('');
+        }
+
+        function updateUI() {
+            // Update select button state
+            const selectBtn = document.getElementById('select-btn');
+            selectBtn.disabled = selectedElementIds.length === 0;
+
+            // Update selected visual state
+            const items = document.querySelectorAll('.element-item');
+            items.forEach(item => {
+                const elementId = item.getAttribute('data-id');
+                if (selectedElementIds.includes(elementId)) {
+                    item.classList.add('selected');
+                } else {
+                    item.classList.remove('selected');
+                }
+            });
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            // Show warning if not in WebView context
+            if (!isInWebViewContext()) {
+                document.getElementById('warning-banner').classList.add('show');
+            }
+
+            // Subscribe to selection changes from Revit
+            subscribeToWebView2Event(WV2EVENTS.SelectionChanged, function(event) {
+                updateElementList(event.detail);
+            });
+
+            console.log('Revit WebView2 Demo initialized');
+        });
+    </script>
+</body>
+</html>

@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Windows;
 using Autodesk.Revit.UI;
-using RevitWebView2Demo.Properties;
 namespace RevitWebView2Demo
 {
     public class DockPanelHelpers
@@ -26,12 +25,11 @@ namespace RevitWebView2Demo
             public WebViewPage win;
 
             public FrameworkElement CreateFrameworkElement()
-            {
-                win = new WebViewPage
+            {                win = new WebViewPage
                 {
                     webView =
                     {
-                        Source = new Uri(Settings.Default.WEBPATH)
+                        Source = new Uri(Constants.WebPath)
                     }
                 };
                 return win;

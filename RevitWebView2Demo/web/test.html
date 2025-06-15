@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Revit WebView2 Demo - Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .warning { background: #fff3cd; color: #856404; border: 1px solid #ffeaa7; }
+        .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            border: 1px solid #007cba;
+            background: white;
+            color: #007cba;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        button:hover { background: #007cba; color: white; }
+        #log { 
+            background: white; 
+            padding: 15px; 
+            border-radius: 4px; 
+            margin-top: 20px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🏗️ Revit WebView2 Demo</h1>
+    
+    <div id="webview-status" class="status warning">
+        Checking WebView2 context...
+    </div>
+
+    <div>
+        <h3>Actions</h3>
+        <button onclick="testCreateSheet()">Create Sheet</button>
+        <button onclick="testSelectElements()">Select Elements</button>
+        <button onclick="clearLog()">Clear Log</button>
+    </div>
+
+    <div>
+        <h3>Selected Elements</h3>
+        <div id="elements-container">
+            <em>No elements selected</em>
+        </div>
+    </div>
+
+    <div>
+        <h3>Debug Log</h3>
+        <div id="log"></div>
+    </div>
+
+    <script>
+        // Log function
+        function log(message) {
+            const logDiv = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            logDiv.innerHTML += `[${timestamp}] ${message}<br>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function clearLog() {
+            document.getElementById('log').innerHTML = '';
+        }
+
+        // Check WebView2 context
+        function checkWebViewContext() {
+            const statusDiv = document.getElementById('webview-status');
+            if (window.chrome && window.chrome.webview) {
+                statusDiv.className = 'status success';
+                statusDiv.textContent = '✅ Running in WebView2 context - Ready to communicate with Revit!';
+                log('WebView2 context detected');
+            } else {
+                statusDiv.className = 'status error';
+                statusDiv.textContent = '❌ Not in WebView2 context - Open this from Revit add-in';
+                log('WebView2 context not detected');
+            }
+        }
+
+        // WebView2 communication
+        function postWebView2Message(data) {
+            if (window.chrome && window.chrome.webview) {
+                log(`Sending to Revit: ${JSON.stringify(data)}`);
+                window.chrome.webview.postMessage(data);
+            } else {
+                log(`Would send to Revit: ${JSON.stringify(data)}`);
+            }
+        }
+
+        // Test functions
+        function testCreateSheet() {
+            postWebView2Message({
+                action: "create-sheet"
+            });
+        }
+
+        function testSelectElements() {
+            postWebView2Message({
+                action: "select",
+                payload: ["sample-element-id-1", "sample-element-id-2"]
+            });
+        }
+
+        // Handle messages from Revit
+        window.dispatchWebViewEvent = function(eventData) {
+            log(`Received from Revit: ${JSON.stringify(eventData)}`);
+            
+            if (eventData.action === 'SelectionChanged') {
+                displayElements(eventData.payload);
+            }
+        };
+
+        function displayElements(elements) {
+            const container = document.getElementById('elements-container');
+            if (!elements || elements.length === 0) {
+                container.innerHTML = '<em>No elements selected</em>';
+                return;
+            }
+
+            container.innerHTML = elements.map(el => `
+                <div style="border: 1px solid #ddd; padding: 10px; margin: 5px 0; border-radius: 4px;">
+                    <strong>${el.name || 'Unnamed Element'}</strong><br>
+                    <small>ID: ${el.id}</small>
+                </div>
+            `).join('');
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            checkWebViewContext();
+            log('Demo initialized');
+        });
+    </script>
+</body>
+</html>
